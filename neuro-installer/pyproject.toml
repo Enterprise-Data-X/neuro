@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuro"
+version = "0.1.0"
+dependencies = [
+    "psutil",
+    "rich",
+    "prompt_toolkit"
+]
+
+[project.scripts]
+neuro = "neuro.cli:main"
