@@ -21,9 +21,12 @@ echo "✨ Fresh environment ready. Starting installation..."
 
 # 2. Create Directory Structure (Fresh)
 mkdir -p "$NEURO_HOME/scripts"
-mkdir -p "$NEURO_HOME/skills"
+mkdir -p "$NEURO_HOME/skills" # SKILLS INSTALLED FOR NEURO AGENT
 mkdir -p "$NEURO_HOME/agents"
 mkdir -p "$NEURO_HOME/logs"
+mkdir -p "$NEURO_HOME/hooks"
+mkdir -p "$NEURO_HOME/plugins"
+mkdir -p "$NEURO_HOME/templates"
 
 
 # 3. Copy your local scripts folder to ~/.neuro/scripts
