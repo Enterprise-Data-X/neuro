@@ -5,6 +5,34 @@ set -e
 NEURO_HOME="$HOME/.neuro"
 INSTALL_SRC="$(pwd)"
 
+echo
+if ! command -v git >/dev/null 2>&1; then
+  echo "❌ git is not installed or not available in PATH. Please install git and try again."
+  exit 1
+fi
+
+while true; do
+  read -p "Template Repository HTTPS Url or SSH: " TEMPLATE_REPO_URL
+  TEMPLATE_REPO_URL="${TEMPLATE_REPO_URL%/}"
+
+  if [ -z "$TEMPLATE_REPO_URL" ]; then
+    echo "❌ No repository URL provided. Please enter a valid URL."
+    continue
+  fi
+
+  TMP_CLONE_DIR="$(mktemp -d)"
+  if git clone "$TEMPLATE_REPO_URL" "$TMP_CLONE_DIR" >/dev/null 2>&1; then
+    echo "✅ Repository URL validated."
+    repo_name="$(basename "$TEMPLATE_REPO_URL")"
+    repo_name="${repo_name%.git}"
+    repo_dir="$NEURO_HOME/.repo/$repo_name"
+    break
+  fi
+
+  echo "❌ Invalid repository URL or clone failed. Please provide a valid HTTPS or SSH repository URL."
+  rm -rf "$TMP_CLONE_DIR"
+done
+
 echo "🧹 Cleaning up previous installation..."
 
 # Kill any running heartbeat processes associated with this user
@@ -20,54 +48,49 @@ hash -r
 echo "✨ Fresh environment ready. Starting installation..."
 
 # 2. Create Directory Structure (Fresh)
-mkdir -p "$NEURO_HOME/scripts"
-mkdir -p "$NEURO_HOME/skills" # SKILLS INSTALLED FOR NEURO AGENT
-mkdir -p "$NEURO_HOME/agents"
+mkdir -p "$NEURO_HOME/skills"
 mkdir -p "$NEURO_HOME/logs"
 mkdir -p "$NEURO_HOME/hooks"
-mkdir -p "$NEURO_HOME/plugins"
-mkdir -p "$NEURO_HOME/templates"
+mkdir -p "$NEURO_HOME/tools"
+mkdir -p "$NEURO_HOME/workspace"
+mkdir -p "$NEURO_HOME/.repo"
 
 
-# 3. Copy your local scripts folder to ~/.neuro/scripts
-# We use -r for recursive and delete existing to ensure a clean copy
-if [ -d "$INSTALL_SRC/neuro/scripts" ]; then
-    echo "📂 Copying scripts to $NEURO_HOME/scripts..."
-    rm -rf "$NEURO_HOME/scripts"
-    cp -r "$INSTALL_SRC/neuro/scripts" "$NEURO_HOME/scripts"
-    # Ensure they are executable
-    chmod -R +x "$NEURO_HOME/scripts"
-else
-    echo "⚠️ Warning: Source scripts folder not found at $INSTALL_SRC/neuro/scripts"
-fi
 
-# 4. Create default config.json with full command structure
+# 3. Create default config.json with full command structure
 if [ ! -f "$NEURO_HOME/config.json" ]; then
     echo "📝 Configuring default commands in config.json..."
     cat <<EOF > "$NEURO_HOME/config.json"
 {
   "version": "1.0.0",
   "loglevel": "Info",
+  "templateRepository": [
+    {
+      "url": "${TEMPLATE_REPO_URL}",
+      "name": "${repo_name}",
+      "path": "${repo_dir}"
+    }
+  ],
   "commands": [
     {
-      "trigger": "/policies",
+      "trigger": "/config",
       "type": "group",
-      "description": "Manage neuro policies",
+      "description": "Manage neuro config",
       "options": [
         {
           "name": "list",
           "type": "module",
-          "action": "neuro.commands.policies.list"
+          "action": "neuro.commands.config.list"
         },
         {
           "name": "add",
           "type": "script",
-          "action": "neuro.commands.policies.add"
+          "action": "neuro.commands.config.add"
         },
         {
           "name": "remove",
           "type": "script",
-          "action": "neuro.commands.policies.remove"
+          "action": "neuro.commands.config.remove"
         }
       ]
     },
@@ -99,85 +122,68 @@ if [ ! -f "$NEURO_HOME/config.json" ]; then
       ]
     },
     {
-      "trigger": "/plugins",
+      "trigger": "/tools",
       "type": "group",
-      "description": "Manage neuro plugins",
+      "description": "Manage neuro tools",
       "options": [
         {
           "name": "list",
           "type": "module",
-          "action": "neuro.commands.plugins.list"
+          "action": "neuro.commands.tools.list"
         },
         {
           "name": "install",
           "type": "module",
-          "action": "neuro.commands.plugins.install"
+          "action": "neuro.commands.tools.install"
         },
         {
           "name": "remove",
           "type": "module",
-          "action": "neuro.commands.plugins.remove"
+          "action": "neuro.commands.tools.remove"
         }
       ]
     },
     {
-      "trigger": "/agent",
+      "trigger": "/hooks",
       "type": "group",
-      "description": "Get current agent",
+      "description": "Get current hooks",
       "options": [
         {
           "name": "config",
           "type": "module",
-          "action": "neuro.commands.agent.config"
+          "action": "neuro.commands.hooks.config"
         },
         {
           "name": "add",
           "type": "module",
-          "action": "neuro.commands.agent.add"
+          "action": "neuro.commands.hooks.add"
         },
         {
           "name": "remove",
           "type": "module",
-          "action": "neuro.commands.agent.remove"
+          "action": "neuro.commands.hooks.remove"
         }
       ]
     },
     {
-      "trigger": "/agents",
+      "trigger": "/logs",
       "type": "group",
-      "description": "Get current configured agents",
-      "options": [
-        {
-          "name": "config",
-          "type": "module",
-          "action": "neuro.commands.agents.config"
-        },
-        {
-          "name": "remove",
-          "type": "module",
-          "action": "neuro.commands.agents.remove"
-        }
-      ]
-    },
-    {
-      "trigger": "/templates",
-      "type": "group",
-      "description": "Manage templates for neuro agent",
+      "description": "Manage logs for neuro agent",
       "options": [
         {
           "name": "add",
           "type": "module",
-          "action": "neuro.commands.templates.add"
+          "action": "neuro.commands.logs.add"
         },
         {
           "name": "list",
           "type": "module",
-          "action": "neuro.commands.templates.list"
+          "action": "neuro.commands.logs.list"
         },
         {
           "name": "remove",
           "type": "module",
-          "action": "neuro.commands.templates.remove"
+          "action": "neuro.commands.logs.remove"
         }
       ]
     }
@@ -185,6 +191,15 @@ if [ ! -f "$NEURO_HOME/config.json" ]; then
 }
 EOF
 fi
+
+if [ -n "$TEMPLATE_REPO_URL" ]; then
+  echo "📥 Moving validated template repository into $repo_dir..."
+  rm -rf "$repo_dir"
+  mkdir -p "$(dirname "$repo_dir")"
+  mv "$TMP_CLONE_DIR" "$repo_dir"
+  echo "✅ Template repository moved to $repo_dir"
+fi
+
 # 5. Refresh the venv and symlink (as done before)
 python3 -m venv "$NEURO_HOME/.venv"
 "$NEURO_HOME/.venv/bin/pip" install --upgrade pip

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from . import agent, bash, clear, config, skill, status
+from . import bash, clear, config, skill, status
 
 BASE_DIR = Path.home() / ".neuro"
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -12,7 +12,6 @@ LOG_PATH = BASE_DIR / "log" / "neuro.log"
 COMMAND_HANDLERS: dict[str, Callable[..., str]] = {
     "/config": config.execute,
     "/skill": skill.execute,
-    "/agent": agent.execute,
     "/status": status.execute,
     "/clear": clear.execute,
     "/bash": bash.execute,
@@ -37,8 +36,6 @@ def handle_slash_command(user_input: str) -> str:
         return f"❓ Unknown command: {cmd}"
 
     if cmd == "/config":
-        return handler(args, CONFIG_PATH)
-    if cmd == "/agent":
         return handler(args, CONFIG_PATH)
     if cmd == "/clear":
         return handler(args, LOG_PATH)
