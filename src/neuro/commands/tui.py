@@ -9,7 +9,7 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from neuro.commands import ensure_directories, handle_slash_command
-from neuro.logger import get_logger
+from logger import get_logger
 from neuro.core.sourcecontrol import pull_repo
 
 console = Console()

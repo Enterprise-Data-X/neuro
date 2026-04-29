@@ -3,8 +3,7 @@ import shutil
 import subprocess
 import sys
 from rich.console import Console
-from neuro.logger import get_logger
-from neuro.config import get_script_path
+from logger import get_logger
 
 console = Console()
 logger = get_logger("SourceControl")

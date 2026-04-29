@@ -55,8 +55,6 @@ mkdir -p "$NEURO_HOME/tools"
 mkdir -p "$NEURO_HOME/workspace"
 mkdir -p "$NEURO_HOME/.repo"
 
-
-
 # 3. Create default config.json with full command structure
 if [ ! -f "$NEURO_HOME/config.json" ]; then
     echo "📝 Configuring default commands in config.json..."
@@ -192,18 +190,37 @@ if [ ! -f "$NEURO_HOME/config.json" ]; then
 EOF
 fi
 
+# 4. Move repository and validate structure
 if [ -n "$TEMPLATE_REPO_URL" ]; then
   echo "📥 Moving validated template repository into $repo_dir..."
   rm -rf "$repo_dir"
   mkdir -p "$(dirname "$repo_dir")"
   mv "$TMP_CLONE_DIR" "$repo_dir"
   echo "✅ Template repository moved to $repo_dir"
+
+  # Validate required folders exist in the repository
+  if [ ! -d "$repo_dir/_common" ]; then
+    echo "❌ Required folder '_common' not found in the repository."
+    echo "   Please ensure your template repository contains a '_common' folder and try again."
+    rm -rf "$repo_dir"
+    exit 1
+  fi
+
+  if [ ! -d "$repo_dir/_persona" ]; then
+    echo "⚠️  Warning: Optional folder '_persona' was not found in the repository."
+  fi
+
+  echo "✅ Repository structure validated."
+
+  # Sync _common assets into neuro home
+  bash "$(dirname "$0")/sync_common.sh" "$repo_dir" "$NEURO_HOME"
 fi
 
-# 5. Refresh the venv and symlink (as done before)
+# 5. Refresh the venv and symlink
 python3 -m venv "$NEURO_HOME/.venv"
 "$NEURO_HOME/.venv/bin/pip" install --upgrade pip
 "$NEURO_HOME/.venv/bin/pip" install -e "$INSTALL_SRC"
 sudo ln -sf "$NEURO_HOME/.venv/bin/neuro" /usr/local/bin/neuro
+hash -r
 
 echo "✅ Installation Complete."

@@ -1,6 +1,6 @@
 import json
 import os
-from neuro.logger import get_logger
+from logger import get_logger
 
 logger = get_logger("config")
 # Base directory
@@ -27,12 +27,3 @@ def get_slash_commands():
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback to an empty list so the TUI can at least open
         return []
-
-# Helper for the TUI to run a script
-def get_script_path(sub_path: str) -> str:
-    """
-    Combines the base scripts directory with a specific sub-path.
-    Input: 'azuredevops/install-skill-from-azuredevops.py'
-    Output: '/home/mpaik/.neuro/scripts/azuredevops/install-skill-from-azuredevops.py'
-    """
-    return os.path.join(SCRIPTS_DIR, sub_path)
