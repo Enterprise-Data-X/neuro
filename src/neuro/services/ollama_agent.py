@@ -52,9 +52,13 @@ class OllamaAgent(NeuroAgent):
         return f"Ollama ({self._model})"
 
     def chat(self, message: str, on_token: Optional[Callable[[str], None]] = None) -> str:
+        messages: list[dict] = []
+        if self._system_prompt:
+            messages.append({"role": "system", "content": self._system_prompt})
+        messages.append({"role": "user", "content": message})
         stream = _ollama_mod.chat(
             model=self._model,
-            messages=[{"role": "user", "content": message}],
+            messages=messages,
             stream=True,
         )
         parts: list[str] = []

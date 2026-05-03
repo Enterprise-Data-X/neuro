@@ -10,6 +10,8 @@ from typing import Callable, Optional
 class NeuroAgent:
     """Common interface that every provider agent must satisfy."""
 
+    _system_prompt: str = ""
+
     @property
     def available(self) -> bool:
         return True
@@ -17,6 +19,9 @@ class NeuroAgent:
     @property
     def provider_name(self) -> str:
         return "unknown"
+
+    def set_context(self, prompt: str) -> None:
+        self._system_prompt = prompt
 
     def chat(self, message: str, on_token: Optional[Callable[[str], None]] = None) -> str:
         raise NotImplementedError

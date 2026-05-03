@@ -18,7 +18,8 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from neuro.commands import ensure_directories, handle_slash_command
+from neuro.commands import ensure_directories
+from neuro.commands import init as init_mod
 from neuro.commands import skills as skills_cmd
 from neuro.commands import status as status_mod
 from neuro.commands import update as update_mod
@@ -282,7 +283,7 @@ def run() -> None:
                         def _confirm(q): return session.prompt(f"{q} [y/N]: ").lower() == "y"
                         update_mod.run(confirm_fn=_confirm)
                     elif sub in _SKILLS_SUB:
-                        skills_cmd.handle(f"/{sub}", sub_args, session, console)
+                        skills_cmd.handle(f"/{sub}", sub_args, session, console, agent=agent)
                     else:
                         _hint("Usage: /skills [list|add|remove|check|create|update]")
                     continue
@@ -317,6 +318,10 @@ def run() -> None:
 
                     continue
 
+                if cmd == "/init":
+                    init_mod.run()
+                    continue
+
                 if cmd == "/status":
                     status_mod.run()
                     continue
@@ -325,10 +330,8 @@ def run() -> None:
                     _show_config(args)
                     continue
 
-                # Fallback for other slash commands (/init, etc.)
-                response = handle_slash_command(user_input)
-                if response:
-                    console.print(f"\n  {response}\n")
+                # Fallback for unrecognised slash commands
+                _warn(f"Unknown command: {cmd}  — type [bold]/help[/] for available commands")
             
             else:
                 if agent.available:

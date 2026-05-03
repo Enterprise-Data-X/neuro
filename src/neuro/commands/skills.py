@@ -274,9 +274,18 @@ def _cmd_update(args: list[str], session: PromptSession, console: Console) -> No
 # ── /create ───────────────────────────────────────────────────────────────────
 
 _SKILL_TEMPLATE = """\
-# Skill: {name}
+---
+name: {name}
+description: {description}
+type: skill
+domain: {domain}
+version: 1.0.0
+author: local
+---
 
-## Description
+# Skill: {title}
+
+## Purpose
 {description}
 
 ## Behavior
@@ -289,8 +298,164 @@ _SKILL_TEMPLATE = """\
 _created: {timestamp} | source: local_
 """
 
+_GENERATE_PROMPT = """\
+You are a Neuro skill generator. Produce a complete, well-structured Neuro skill file in Markdown.
 
-def _cmd_create(session: PromptSession, console: Console) -> None:
+A valid Neuro skill file MUST start with YAML frontmatter followed by structured sections. \
+Use exactly this layout (replace angle-bracket placeholders):
+
+---
+name: {name}
+description: {description}
+type: skill
+domain: {domain}
+version: 1.0.0
+author: local
+---
+
+# Skill: {title}
+
+## Purpose
+(2–3 sentences explaining what this skill does and why it matters)
+
+## When to Apply
+(bullet list of situations or triggers for applying this skill)
+
+## Behavior
+(specific, actionable AI instructions — what the agent MUST do when this skill is active)
+
+## Constraints
+(what the agent must NOT do; hard limits and guardrails)
+
+---
+_created: {timestamp} | source: local_
+
+Generate a skill file for the following inputs:
+- Name: {name}
+- Description: {description}
+- Domain: {domain}
+- Key behaviors: {behaviors}
+{extra_section}
+Output ONLY the skill file content. No explanation, no preamble, no markdown code fences.
+"""
+
+
+def _generate_with_agent(
+    agent,
+    name: str,
+    description: str,
+    domain: str,
+    behaviors: str,
+    console: Console,
+    extra: str = "",
+) -> str | None:
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    title = name.replace("-", " ").replace("_", " ").title()
+    extra_section = f"- Refinement request: {extra}\n" if extra else ""
+
+    prompt = _GENERATE_PROMPT.format(
+        name=name,
+        title=title,
+        description=description,
+        domain=domain,
+        behaviors=behaviors,
+        timestamp=timestamp,
+        extra_section=extra_section,
+    )
+
+    parts: list[str] = []
+    console.print()
+    console.print("  [dim cyan]Generating skill…[/]")
+    console.print()
+
+    try:
+        agent.chat(prompt, on_token=lambda t: parts.append(t))
+    except RuntimeError as exc:
+        _err(console, f"Agent error: {exc}")
+        return None
+    except Exception as exc:
+        _err(console, f"Unexpected error during generation: {exc}")
+        return None
+
+    result = "".join(parts).strip()
+    if not result:
+        _err(console, "Agent returned empty content.")
+        return None
+    return result
+
+
+def _fallback_content(name: str, description: str, behaviors: str, constraints: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    title = name.replace("-", " ").replace("_", " ").title()
+    return _SKILL_TEMPLATE.format(
+        name=name,
+        title=title,
+        description=description or "(no description)",
+        domain="general",
+        behavior=behaviors or "(no behavior specified)",
+        constraints=constraints or "None",
+        timestamp=timestamp,
+    )
+
+
+def _review_loop(
+    session: PromptSession,
+    console: Console,
+    agent,
+    name: str,
+    description: str,
+    domain: str,
+    behaviors: str,
+    content: str,
+) -> str | None:
+    """Show preview + policy check; return final content to install or None to cancel."""
+    while True:
+        # Policy check
+        console.print()
+        _section(console, "Policy Check")
+        issues = validate_skill_content(name, content)
+        if issues:
+            _err(console, f"{len(issues)} policy violation(s) found:")
+            for issue in issues:
+                console.print(f"    [dim red]•[/]  [red]{issue}[/]")
+        else:
+            _ok(console, "All policy checks passed.")
+
+        # Preview
+        console.print()
+        _section(console, "Preview")
+        console.print(Syntax(content, "markdown", theme="ansi_dark", word_wrap=True))
+        console.print()
+
+        if issues:
+            _hint(console, "[A]ccept anyway   [R]egenerate   [C]ancel")
+        else:
+            _hint(console, "[A]ccept   [R]egenerate   [C]ancel")
+
+        choice = _prompt(session, "  Choice [A/r/c]:  ", default="a").lower()
+
+        if choice in ("c", "cancel"):
+            _hint(console, "Cancelled.")
+            console.print()
+            return None
+
+        if choice in ("a", "accept", ""):
+            return content
+
+        # Regenerate
+        if agent is None:
+            _warn(console, "No AI agent available — cannot regenerate.")
+            continue
+
+        extra = _prompt(session, "  Refinement request (blank for none):  ", default="")
+        new_content = _generate_with_agent(
+            agent, name, description, domain, behaviors, console, extra=extra
+        )
+        if new_content is not None:
+            content = new_content
+
+
+def _cmd_create(session: PromptSession, console: Console, agent=None) -> None:
     console.print()
     _section(console, "Create Skill")
 
@@ -310,52 +475,30 @@ def _cmd_create(session: PromptSession, console: Console) -> None:
 
     description = _prompt(session, "  Short description (one line):  ")
 
-    console.print()
-    behavior = _multiline(session, console, "Behavior instructions — what should the AI do with this skill?")
-
-    console.print()
-    constraints_raw = _multiline(session, console, "Constraints or restrictions (optional):")
-    constraints = constraints_raw.strip() or "None"
-
-    # Build content
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    content = _SKILL_TEMPLATE.format(
-        name=name,
-        description=description,
-        behavior=behavior or "(no behavior specified)",
-        constraints=constraints,
-        timestamp=timestamp,
-    )
-
-    # Policy check
-    console.print()
-    _section(console, "Policy Check")
-
-    issues = validate_skill_content(name, content)
-    if issues:
-        _err(console, f"{len(issues)} policy violation(s) found:")
-        for issue in issues:
-            console.print(f"    [dim red]•[/]  [red]{issue}[/]")
+    if agent is not None:
+        domain = _prompt(session, "  Domain (e.g. development, security, testing, architecture):  ", default="general")
         console.print()
-        if not _confirm(session, console, "Install anyway (not recommended)?"):
-            _hint(console, "Skill not installed. Fix the issues and try /create again.")
+        behaviors = _multiline(session, console, "Key behaviors — what should the AI do with this skill?")
+        content = _generate_with_agent(agent, name, description, domain, behaviors, console)
+        if content is None:
+            _warn(console, "AI generation failed — falling back to manual template.")
             console.print()
-            return
+            constraints_raw = _multiline(session, console, "Constraints or restrictions (optional):")
+            content = _fallback_content(name, description, behaviors, constraints_raw)
     else:
-        _ok(console, "All policy checks passed.")
-
-    # Preview
-    console.print()
-    _section(console, "Preview")
-    console.print(Syntax(content, "markdown", theme="ansi_dark", word_wrap=True))
-    console.print()
-
-    if not _confirm(session, console, f"Install skill '[bold white]{name}[/bold white]' to ~/.neuro/skills/?"):
-        _hint(console, "Cancelled.")
+        _hint(console, "No AI agent available — using manual template.")
         console.print()
+        domain = "general"
+        behaviors = _multiline(session, console, "Behavior instructions — what should the AI do with this skill?")
+        console.print()
+        constraints_raw = _multiline(session, console, "Constraints or restrictions (optional):")
+        content = _fallback_content(name, description, behaviors, constraints_raw)
+
+    final = _review_loop(session, console, agent, name, description, domain, behaviors, content)
+    if final is None:
         return
 
-    skill_file = sm.install_skill_content(name, content)
+    skill_file = sm.install_skill_content(name, final)
     console.print()
     _ok(console, f"Skill installed  [dim]→ {skill_file}[/]")
     _hint(console, "Run [bold]/init[/] to sync this skill to your installed agents.")
@@ -364,7 +507,7 @@ def _cmd_create(session: PromptSession, console: Console) -> None:
 
 # ── dispatcher ────────────────────────────────────────────────────────────────
 
-def handle(cmd: str, args: list[str], session: PromptSession, console: Console) -> None:
+def handle(cmd: str, args: list[str], session: PromptSession, console: Console, agent=None) -> None:
     if cmd == "/list":
         _cmd_list(console)
     elif cmd == "/add":
@@ -374,6 +517,6 @@ def handle(cmd: str, args: list[str], session: PromptSession, console: Console) 
     elif cmd == "/check":
         _cmd_update(args, session, console)
     elif cmd == "/create":
-        _cmd_create(session, console)
+        _cmd_create(session, console, agent=agent)
     else:
         _warn(console, f"Unknown skill command: {cmd}")

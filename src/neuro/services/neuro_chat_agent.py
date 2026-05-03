@@ -44,6 +44,87 @@ def _load_config() -> dict:
     return {}
 
 
+def _skill_description(path: Path) -> str:
+    """Read the `description:` field from a skill file's YAML frontmatter."""
+    try:
+        text = path.read_text(encoding="utf-8")
+        if text.startswith("---"):
+            end = text.find("\n---", 3)
+            if end != -1:
+                for line in text[3:end].splitlines():
+                    if line.startswith("description:"):
+                        return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def build_system_prompt() -> str:
+    """
+    Build the Neuro-aware system prompt injected into every TUI chat call.
+    Loads NEURO.md + installed skills/tools list + active role from config.
+    """
+    config   = _load_config()
+    role     = config.get("role", "")
+    provider = (config.get("agent") or {}).get("provider", "")
+
+    skills_dir = NEURO_HOME / "skills"
+    tools_dir  = NEURO_HOME / "tools"
+
+    skill_lines: list[str] = []
+    if skills_dir.exists():
+        for f in sorted(skills_dir.glob("*.md")):
+            desc = _skill_description(f)
+            skill_lines.append(f"  • {f.stem}" + (f" — {desc}" if desc else ""))
+
+    tool_lines: list[str] = []
+    if tools_dir.exists():
+        for f in sorted(tools_dir.iterdir()):
+            tool_lines.append(f"  • {f.name}")
+
+    neuro_md = ""
+    neuro_md_path = skills_dir / "NEURO.md"
+    if neuro_md_path.exists():
+        try:
+            neuro_md = neuro_md_path.read_text(encoding="utf-8")
+        except OSError:
+            pass
+
+    parts: list[str] = [
+        "You are the Neuro Agent — an AI assistant embedded in the Neuro CLI.",
+        "Neuro is an organisational AI alignment framework that synchronises agent behaviour,",
+        "persona, and tooling standards across development teams.",
+        "",
+        "Your purpose is to help users manage and understand their Neuro environment.",
+        "This includes: installed skills and tools, AI provider configuration, persona alignment,",
+        "the skill vault, and any question covered by NEURO.md.",
+        "",
+        "If a user's question falls outside the Neuro scope (general coding, unrelated topics),",
+        "politely guide them back:",
+        "  'I'm the Neuro Agent — I'm best placed to help with your Neuro environment.",
+        "   For general questions, use your AI assistant outside of the Neuro TUI.'",
+        "",
+    ]
+
+    if role:
+        parts += [f"Active persona: {role}", ""]
+    if provider:
+        parts += [f"AI provider: {provider}", ""]
+
+    if skill_lines:
+        parts += ["Installed skills:"] + skill_lines + [""]
+    else:
+        parts += ["No skills installed yet — advise user to run `neuro init`.", ""]
+
+    if tool_lines:
+        parts += ["Installed tools:"] + tool_lines + [""]
+
+    if neuro_md:
+        parts += ["---", "", neuro_md]
+
+    return "\n".join(parts)
+
+
 def create_agent() -> NeuroAgent:
     """
     Build a NeuroAgent from config.json, falling back to auto-discovery.
@@ -55,6 +136,13 @@ def create_agent() -> NeuroAgent:
     model     = agent_cfg.get("model") or ""
     api_key   = agent_cfg.get("api_key") or ""
 
+    agent = _build_agent(provider, model, api_key)
+    if agent.available:
+        agent.set_context(build_system_prompt())
+    return agent
+
+
+def _build_agent(provider: str, model: str, api_key: str) -> NeuroAgent:
     # ── config-driven ─────────────────────────────────────────────────────────
 
     if provider == "claude":

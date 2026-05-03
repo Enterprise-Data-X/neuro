@@ -28,11 +28,16 @@ class ClaudeAgent(NeuroAgent):
             return 1
 
     def chat(self, message: str, on_token: Optional[Callable[[str], None]] = None) -> str:
-        cmd = [self._bin, "--bare", "-p", message]
+        full_message = f"{self._system_prompt}\n\n---\n\n{message}" if self._system_prompt else message
+        cmd = [self._bin, "--bare", "-p", full_message]
         if self._model:
             cmd += ["--model", self._model]
         process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         parts: list[str] = []
         for line in iter(process.stdout.readline, ""):
