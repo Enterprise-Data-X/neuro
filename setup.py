@@ -9,13 +9,17 @@ setup(
         'neuro': ['NEURO.md'],
     },
     include_package_data=True,
-    # --- ENSURE THESE ARE LISTED ---
     install_requires=[
-        "questionary",
         "click",
-        "rich"
+        "rich",
+        "prompt_toolkit",
     ],
-    # -------------------------------
+    extras_require={
+        "anthropic": ["anthropic"],
+        "openai":    ["openai"],
+        "github":    ["openai"],
+        "all":       ["anthropic", "openai"],
+    },
     entry_points={
         'console_scripts': [
             'neuro=neuro.cli:main',

@@ -2,6 +2,63 @@ import os
 import re
 from typing import Dict, List
 
+# ── standalone content validator (used during skill creation) ─────────────────
+
+_FORBIDDEN_SHELL: list[str] = [
+    r"rm\s+-[rf]{1,2}\b",
+    r"\bsudo\b",
+    r"chmod\s+777",
+    r"curl\b[^|]*\|\s*bash",
+    r"wget\b[^|]*\|\s*bash",
+    r"eval\s*\$\(",
+]
+
+_SENSITIVE_DATA: list[str] = [
+    r"\.env\b",
+    r"\bsecrets?\b",
+    r"\bcredentials?\b",
+    r"private[-_]?key",
+    r"-----BEGIN\s+\w+\s+PRIVATE KEY-----",
+    r"\bAKIA[0-9A-Z]{16}\b",
+    r"password\s*=\s*\S",
+    r"api[_-]key\s*=\s*\S",
+]
+
+
+def validate_skill_content(name: str, content: str) -> list[str]:
+    """
+    Check a skill name + content against Neuro policy rules.
+    Returns a list of violation messages; empty list means clean.
+    """
+    issues: list[str] = []
+
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}$", name):
+        issues.append(
+            f"Skill name '{name}' is invalid — use letters, digits, hyphens, "
+            "underscores, start with a letter or digit, max 49 chars."
+        )
+
+    if not content.strip():
+        issues.append("Content is empty.")
+        return issues
+
+    if len(content.split()) < 10:
+        issues.append(
+            "Content is too short (< 10 words). Provide a meaningful description and behavior."
+        )
+
+    for pattern in _FORBIDDEN_SHELL:
+        if re.search(pattern, content, re.IGNORECASE):
+            issues.append(f"Forbidden shell pattern detected: `{pattern}`")
+
+    for pattern in _SENSITIVE_DATA:
+        if re.search(pattern, content, re.IGNORECASE):
+            issues.append(f"Sensitive data reference detected: `{pattern}`")
+
+    return issues
+
+
+# ── class-based policy (file/command enforcement) ─────────────────────────────
 
 class Policy:
     def __init__(self, project_path: str):

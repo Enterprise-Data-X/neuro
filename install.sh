@@ -1,222 +1,278 @@
 #!/bin/bash
 set -e
 
-# ─── Helper Functions ────────────────────────────────────────────────────────
+# ─── 1. Constants & Styling ──────────────────────────────────────────────────
+NEURO_HOME="$HOME/.neuro"
+INSTALL_SRC="$(pwd)"
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' 
+
+echo -e "${BOLD}${CYAN}🧠 Neuro AI Framework: Developer & BA Setup${NC}"
+echo -e "------------------------------------------------"
+
+# ─── 2. Helper Functions ─────────────────────────────────────────────────────
 
 sync_folder() {
   local SRC="$1"
   local DEST="$2"
   local LABEL="$3"
-
   if [ -d "$SRC" ]; then
-    echo "  🔄 Copying $LABEL..."
+    echo -e "  ${GREEN}🔄 Syncing $LABEL...${NC}"
     mkdir -p "$DEST"
     cp -r "$SRC/." "$DEST/"
-    echo "  ✅ $LABEL synced."
-  else
-    echo "  ⏭️  No $LABEL folder found, skipping."
   fi
 }
 
-sync_common() {
-  local REPO_DIR="$1"
-  local NEURO_HOME="$2"
-  local COMMON_DIR="$REPO_DIR/_common"
+# ─── 3. Reinstall Guard ──────────────────────────────────────────────────────
 
-  if [ ! -d "$COMMON_DIR" ]; then
-    echo "❌ _common directory not found at $COMMON_DIR"
-    exit 1
-  fi
-
-  echo "📦 Syncing _common assets into neuro home..."
-
-  sync_folder "$COMMON_DIR/skills" "$NEURO_HOME/skills" "skills"
-  sync_folder "$COMMON_DIR/tools"  "$NEURO_HOME/tools"  "tools"
-  sync_folder "$COMMON_DIR/hooks"  "$NEURO_HOME/hooks"  "hooks"
-
-  echo "✅ _common sync complete."
-}
-
-sync_persona() {
-  local REPO_DIR="$1"
-  local NEURO_HOME="$2"
-  local PERSONA_DIR="$REPO_DIR/_persona"
-
-  if [ ! -d "$PERSONA_DIR" ]; then
-    echo "⚠️  No _persona folder found in repository, skipping persona sync."
-    return
-  fi
-
-  # List available roles from folder names
-  local available_roles
-  available_roles=$(ls -d "$PERSONA_DIR"/*/  2>/dev/null | xargs -I{} basename {} | tr '\n' ', ' | sed 's/,$//')
-
-  if [ -z "$available_roles" ]; then
-    echo "⚠️  No roles found inside _persona, skipping persona sync."
-    return
-  fi
-
-  echo ""
-  echo "👥 Persona Selection"
-  echo "   The '_persona' folder contains role/team-specific assets such as skills, tools,"
-  echo "   and hooks. Each subfolder represents a distinct role or team (e.g. 'developer',"
-  echo "   'devops', 'analyst'). Selecting a persona will copy its assets into your neuro home."
-  echo ""
-  echo "   Available roles: $available_roles"
-  echo ""
-
-  local max_attempts=3
-  local attempt=0
-  local role=""
-
-  while [ $attempt -lt $max_attempts ]; do
-    attempt=$((attempt + 1))
-
-    read -p "   Enter your role/team name: " role
-    role="${role// /_}"  # normalise spaces to underscores
-
-    if [ -z "$role" ]; then
-      echo "  ❌ No input provided. Please enter a role name."
-    elif [ -d "$PERSONA_DIR/$role" ]; then
-      echo "  ✅ Persona '$role' found."
-      break
-    else
-      remaining=$((max_attempts - attempt))
-      if [ $remaining -gt 0 ]; then
-        echo "  ❌ Role '$role' not found. $remaining attempt(s) remaining."
-        echo "     Available roles: $available_roles"
-      else
-        echo "  ❌ Role '$role' not found. No attempts remaining, skipping persona sync."
-        return
-      fi
-    fi
-
-    role=""
+if [ -d "$NEURO_HOME" ]; then
+  echo -e "${YELLOW}⚠️  Existing Neuro installation found at $NEURO_HOME.${NC}"
+  while true; do
+    read -p "   Reinstall? This will reset your config. [y/n]: " confirm
+    case $confirm in
+      [Yy]*) 
+        sudo rm -f /usr/local/bin/neuro
+        rm -rf "$NEURO_HOME"
+        break ;;
+      [Nn]*) echo "Installation aborted."; exit 0 ;;
+      *) echo "Please answer y or n." ;;
+    esac
   done
-
-  if [ -z "$role" ]; then
-    return
-  fi
-
-  echo "📦 Syncing persona '$role' assets into neuro home..."
-
-  sync_folder "$PERSONA_DIR/$role/skills" "$NEURO_HOME/skills" "skills"
-  sync_folder "$PERSONA_DIR/$role/tools"  "$NEURO_HOME/tools"  "tools"
-  sync_folder "$PERSONA_DIR/$role/hooks"  "$NEURO_HOME/hooks"  "hooks"
-
-  echo "✅ Persona '$role' sync complete."
-}
-
-# ─── 1. Define Paths ─────────────────────────────────────────────────────────
-
-NEURO_HOME="$HOME/.neuro"
-INSTALL_SRC="$(pwd)"
-
-echo
-if ! command -v git >/dev/null 2>&1; then
-  echo "❌ git is not installed or not available in PATH. Please install git and try again."
-  exit 1
 fi
 
-# ─── 2. Validate Repository ──────────────────────────────────────────────────
+mkdir -p "$NEURO_HOME"/{skills,hooks,tools,template}
+
+# ─── 4. Dynamic Provider & Model Selection ───────────────────────────────────
+
+echo -e "\n${BOLD}🤖 Step 1: Select AI Agent Type${NC}"
+echo -e "   1) Claude Pro CLI  -> Best for Devs  (Claude Code subscription)"
+echo -e "   2) Ollama (Local)  -> local agent    (runs offline, free)"
+echo -e "   3) Codex           -> Cloud API      (OpenAI API key required)"
+echo -e "   4) GitHub Copilot  -> GitHub Models  (GITHUB_TOKEN required)"
 
 while true; do
-  read -p "Template Repository HTTPS Url or SSH: " TEMPLATE_REPO_URL
-  TEMPLATE_REPO_URL="${TEMPLATE_REPO_URL%/}"
-
-  if [ -z "$TEMPLATE_REPO_URL" ]; then
-    echo "❌ No repository URL provided. Please enter a valid URL."
-    continue
-  fi
-
-  TMP_CLONE_DIR="$(mktemp -d)"
-  if git clone "$TEMPLATE_REPO_URL" "$TMP_CLONE_DIR" >/dev/null 2>&1; then
-    echo "✅ Repository URL validated."
-    repo_name="$(basename "$TEMPLATE_REPO_URL")"
-    repo_name="${repo_name%.git}"
-    repo_dir="$NEURO_HOME/.repo/$repo_name"
-    break
-  fi
-
-  echo "❌ Invalid repository URL or clone failed. Please provide a valid HTTPS or SSH repository URL."
-  rm -rf "$TMP_CLONE_DIR"
+  read -p "   Selection (1-4): " p_choice
+  case $p_choice in
+    1)
+      SELECTED_PROVIDER="claude"
+      if ! command -v claude >/dev/null 2>&1; then
+          echo -e "   ${YELLOW}📥 Installing Claude Code CLI via npm...${NC}"
+          sudo npm install -g @anthropic-ai/claude-code
+      fi
+      echo -e "\n   ${BOLD}🎯 Step 2: Select Claude Model${NC}"
+      echo "   1) claude-3-7-sonnet-latest"
+      echo "   2) claude-4-opus-latest"
+      while true; do
+        read -p "   Select (1-2) [default 1]: " m_c
+        m_c=${m_c:-1}
+        [[ "$m_c" == "1" ]] && { SELECTED_MODEL="claude-3-7-sonnet-latest"; break; }
+        [[ "$m_c" == "2" ]] && { SELECTED_MODEL="claude-4-opus-latest"; break; }
+        echo "Invalid selection."
+      done
+      break ;;
+    2)
+      SELECTED_PROVIDER="ollama"
+      if ! command -v ollama >/dev/null 2>&1; then
+          echo -e "${RED}❌ Ollama not found. Install from ollama.com first.${NC}"
+          exit 1
+      fi
+      echo -e "   ${CYAN}🔍 Fetching local Ollama models...${NC}"
+      mapfile -t models < <(ollama list | awk 'NR>1 {print $1}')
+      if [ ${#models[@]} -eq 0 ]; then
+          echo -e "${RED}❌ No models found. Run 'ollama pull llama3' first.${NC}"
+          exit 1
+      fi
+      for i in "${!models[@]}"; do echo "   $((i+1))) ${models[$i]}"; done
+      while true; do
+        read -p "   Select model (1-${#models[@]}): " m_idx
+        if [[ "$m_idx" =~ ^[0-9]+$ ]] && [ "$m_idx" -ge 1 ] && [ "$m_idx" -le "${#models[@]}" ]; then
+            SELECTED_MODEL="${models[$((m_idx-1))]}"
+            break
+        fi
+        echo "Invalid number."
+      done
+      break ;;
+    3)
+      SELECTED_PROVIDER="codex"
+      while true; do
+        read -sp "   🔑 Enter Codex (OpenAI) API Key: " CODEX_API_KEY
+        if [ -n "$CODEX_API_KEY" ]; then break; fi
+        echo -e "\n${RED}   API Key cannot be empty.${NC}"
+      done
+      echo -e "\n   ${CYAN}🔍 Fetching live models from Codex...${NC}"
+      
+      # Use Python to validate key and fetch models
+      FETCH_RESULT=$(python3 - <<EOF
+import urllib.request, json, sys
+try:
+    req = urllib.request.Request("https://api.openai.com/v1/models")
+    req.add_header("Authorization", "Bearer $CODEX_API_KEY")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        data = json.loads(r.read())
+        m_list = sorted([m['id'] for m in data['data'] if 'gpt' in m['id']])[:10]
+        if not m_list: raise Exception("No GPT models")
+        for i, name in enumerate(m_list): print(f"   {i+1}) {name}", file=sys.stderr)
+        print("SUCCESS")
+        print("\n".join(m_list))
+except:
+    print("FAILED")
+EOF
+)
+      if [[ $(echo "$FETCH_RESULT" | head -n 1) == "FAILED" ]]; then
+          echo -e "${RED}   Failed to fetch models. API key might be invalid.${NC}"
+          SELECTED_MODEL="gpt-4o" # Safe fallback for Codex
+      else
+          mapfile -t c_models < <(echo "$FETCH_RESULT" | sed -n '2,$p')
+          while true; do
+            read -p "   Select number: " c_idx
+            if [[ "$c_idx" =~ ^[0-9]+$ ]] && [ "$c_idx" -ge 1 ] && [ "$c_idx" -le "${#c_models[@]}" ]; then
+                SELECTED_MODEL="${c_models[$((c_idx-1))]}"
+                break
+            fi
+            echo "Invalid selection."
+          done
+      fi
+      break ;;
+    4)
+      SELECTED_PROVIDER="copilot"
+      if [ -z "$GITHUB_TOKEN" ]; then
+        read -sp "   🔑 Enter GitHub Personal Access Token: " GITHUB_TOKEN
+        echo
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo -e "${RED}❌ GitHub Token is required for Copilot.${NC}"
+          exit 1
+        fi
+      else
+        echo -e "   ${GREEN}✅ GITHUB_TOKEN found in environment.${NC}"
+      fi
+      echo -e "\n   ${BOLD}🎯 Step 2: Select GitHub Model${NC}"
+      echo "   1) openai/gpt-4o"
+      echo "   2) openai/gpt-4o-mini"
+      echo "   3) meta/llama-3.3-70b-instruct"
+      while true; do
+        read -p "   Select (1-3) [default 1]: " m_c
+        m_c=${m_c:-1}
+        [[ "$m_c" == "1" ]] && { SELECTED_MODEL="openai/gpt-4o"; break; }
+        [[ "$m_c" == "2" ]] && { SELECTED_MODEL="openai/gpt-4o-mini"; break; }
+        [[ "$m_c" == "3" ]] && { SELECTED_MODEL="meta/llama-3.3-70b-instruct"; break; }
+        echo "Invalid selection."
+      done
+      break ;;
+    *) echo "Please enter 1, 2, 3, or 4." ;;
+  esac
 done
 
-# ─── 3. Clean Up Previous Installation ───────────────────────────────────────
+# ─── 5. Repository & Persona Sync ───────────────────────────────────────────
 
-echo "🧹 Cleaning up previous installation..."
+echo -e "\n${BOLD}🔗 Step 3: Skill Template Repository${NC}"
+while true; do
+  read -p "   Enter Template Repo URL (Git): " TEMPLATE_REPO_URL
+  if [[ -z "$TEMPLATE_REPO_URL" ]]; then 
+    echo "URL cannot be empty."
+    continue 
+  fi
+  TMP_CLONE_DIR="$(mktemp -d)"
+  if git clone "$TEMPLATE_REPO_URL" "$TMP_CLONE_DIR" --quiet; then
+    repo_name="$(basename "$TEMPLATE_REPO_URL" .git)"
+    repo_dir="$NEURO_HOME/template/$repo_name"
+    mv "$TMP_CLONE_DIR" "$repo_dir"
+    echo -e "   ${GREEN}✅ Repository Cloned.${NC}"
+    break
+  else
+    echo -e "   ${RED}❌ Git clone failed. Check the URL and your credentials.${NC}"
+    rm -rf "$TMP_CLONE_DIR"
+  fi
+done
 
-pkill -f "neuro heartbeat" || true
-rm -rf "$NEURO_HOME"
-sudo rm -f /usr/local/bin/neuro
-hash -r
-
-echo "✨ Fresh environment ready. Starting installation..."
-
-# ─── 4. Create Directory Structure ───────────────────────────────────────────
-
-mkdir -p "$NEURO_HOME/skills"
-mkdir -p "$NEURO_HOME/hooks"
-mkdir -p "$NEURO_HOME/tools"
-# mkdir -p "$NEURO_HOME/workspace"
-mkdir -p "$NEURO_HOME/.repo"
-# ─── 5. Create config.json ───────────────────────────────────────────────────
-
-if [ ! -f "$NEURO_HOME/config.json" ]; then
-    echo "📝 Configuring default commands in config.json..."
-    cat <<EOF > "$NEURO_HOME/config.json"
-{
-  "version": "1.0.0",
-  "loglevel": "Info",
-  "templateRepository": [
-    {
-      "url": "${TEMPLATE_REPO_URL}",
-      "name": "${repo_name}",
-      "path": "${repo_dir}"
-    }
-  ]
+# Sync assets
+[[ -d "$repo_dir/_common" ]] && {
+    sync_folder "$repo_dir/_common/skills" "$NEURO_HOME/skills" "common-skills"
+    sync_folder "$repo_dir/_common/tools"  "$NEURO_HOME/tools"  "common-tools"
 }
-EOF
+
+PERSONA_DIR="$repo_dir/_persona"
+SELECTED_ROLE="default"
+if [ -d "$PERSONA_DIR" ]; then
+    echo -e "\n${BOLD}👥 Step 4: Choose your Role Persona${NC}"
+    roles=($(ls -d "$PERSONA_DIR"/*/ 2>/dev/null | xargs -I{} basename {}))
+    if [ ${#roles[@]} -gt 0 ]; then
+        for i in "${!roles[@]}"; do echo "   $((i+1))) ${roles[$i]}"; done
+        while true; do
+            read -p "   Selection (1-${#roles[@]}): " r_idx
+            if [[ "$r_idx" =~ ^[0-9]+$ ]] && [ "$r_idx" -ge 1 ] && [ "$r_idx" -le "${#roles[@]}" ]; then
+                SELECTED_ROLE="${roles[$((r_idx-1))]}"
+                sync_folder "$PERSONA_DIR/$SELECTED_ROLE/skills" "$NEURO_HOME/skills" "role-skills"
+                sync_folder "$PERSONA_DIR/$SELECTED_ROLE/tools"  "$NEURO_HOME/tools"  "role-tools"
+                break
+            fi
+            echo "Invalid selection."
+        done
+    fi
 fi
 
-# ─── 6. Move Repository & Validate Structure ─────────────────────────────────
+# ─── 5b. Agent-specific Skills ───────────────────────────────────────────────
+# Template repos may ship provider-specific skills under _agents/<provider>/.
+# e.g.  _agents/claude/skills/   _agents/ollama/skills/
 
-if [ -n "$TEMPLATE_REPO_URL" ]; then
-  echo "📥 Moving validated template repository into $repo_dir..."
-  rm -rf "$repo_dir"
-  mkdir -p "$(dirname "$repo_dir")"
-  mv "$TMP_CLONE_DIR" "$repo_dir"
-  echo "✅ Template repository moved to $repo_dir"
-
-  if [ ! -d "$repo_dir/_common" ]; then
-    echo "❌ Required folder '_common' not found in the repository."
-    echo "   Please ensure your template repository contains a '_common' folder and try again."
-    rm -rf "$repo_dir"
-    exit 1
-  fi
-
-  if [ ! -d "$repo_dir/_persona" ]; then
-    echo "⚠️  Warning: Optional folder '_persona' was not found in the repository."
-  fi
-
-  echo "✅ Repository structure validated."
-
-  # Sync _common assets into neuro home
-  sync_common "$repo_dir" "$NEURO_HOME"
-
-  # Sync _persona assets into neuro home
-  sync_persona "$repo_dir" "$NEURO_HOME"
+AGENT_SKILL_DIR="$repo_dir/_agents/$SELECTED_PROVIDER"
+if [ -d "$AGENT_SKILL_DIR" ]; then
+    echo -e "\n${BOLD}🎯 Step 5: Syncing ${SELECTED_PROVIDER}-specific skills & tools${NC}"
+    sync_folder "$AGENT_SKILL_DIR/skills" "$NEURO_HOME/skills" "${SELECTED_PROVIDER}-skills"
+    sync_folder "$AGENT_SKILL_DIR/tools"  "$NEURO_HOME/tools"  "${SELECTED_PROVIDER}-tools"
+else
+    echo -e "  ${CYAN}ℹ  No provider-specific assets for '${SELECTED_PROVIDER}' in this template.${NC}"
 fi
 
-# ─── 7. Install Python Package & Global CLI ──────────────────────────────────
+# ─── 6. Finalizing Configuration ─────────────────────────────────────────────
 
+python3 - <<PYEOF
+import json, os
+
+# Determine api_key to persist (codex/copilot only)
+provider  = "${SELECTED_PROVIDER}"
+api_key   = ""
+if provider == "codex":
+    api_key = os.environ.get("CODEX_API_KEY", "")
+elif provider == "copilot":
+    api_key = "${GITHUB_TOKEN}"
+
+agent_cfg = {"provider": provider, "model": "${SELECTED_MODEL}"}
+if api_key:
+    agent_cfg["api_key"] = api_key
+
+config = {
+    "version": "1.0.0",
+    "agent": agent_cfg,
+    "templateRepository": [
+        {"url": "${TEMPLATE_REPO_URL}", "name": "${repo_name}", "path": "${repo_dir}"}
+    ],
+    "role": "${SELECTED_ROLE}",
+}
+with open("${NEURO_HOME}/config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+PYEOF
+
+echo -e "\n${BOLD}📦 Installing Neuro Python Environment...${NC}"
 python3 -m venv "$NEURO_HOME/.venv"
-"$NEURO_HOME/.venv/bin/pip" install --upgrade pip
-"$NEURO_HOME/.venv/bin/pip" install -e "$INSTALL_SRC"
+"$NEURO_HOME/.venv/bin/pip" install --upgrade pip --quiet
+"$NEURO_HOME/.venv/bin/pip" install "$INSTALL_SRC" --quiet
+
+# Install provider-specific python SDK
+echo -e "  ${CYAN}📦 Installing AI provider SDK...${NC}"
+case "$SELECTED_PROVIDER" in
+  claude)    "$NEURO_HOME/.venv/bin/pip" install anthropic --quiet ;;
+  ollama)    "$NEURO_HOME/.venv/bin/pip" install ollama    --quiet ;;
+  codex)     "$NEURO_HOME/.venv/bin/pip" install openai    --quiet ;;
+  copilot)   "$NEURO_HOME/.venv/bin/pip" install openai    --quiet ;;
+esac
+
+echo -e "${BOLD}🔗 Creating global 'neuro' command...${NC}"
 sudo ln -sf "$NEURO_HOME/.venv/bin/neuro" /usr/local/bin/neuro
-hash -r
 
-
-sudo rm -rf $NEURO_HOME/.repo
-
-echo "✅ Installation Complete."
+echo -e "\n${GREEN}${BOLD}✅ INSTALLATION SUCCESSFUL!${NC}"
+echo -e "🚀 Type ${BOLD}'neuro'${NC} to start using ${CYAN}$SELECTED_PROVIDER ($SELECTED_MODEL)${NC}."

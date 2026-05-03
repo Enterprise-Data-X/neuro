@@ -6,10 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "neuro"
 version = "0.1.0"
 dependencies = [
-    "psutil",
+    "click",
     "rich",
-    "prompt_toolkit"
+    "prompt_toolkit",
 ]
+
+[project.optional-dependencies]
+anthropic = ["anthropic"]
+openai    = ["openai"]
+github    = ["openai"]
+all       = ["anthropic", "openai"]
 
 [project.scripts]
 neuro = "neuro.cli:main"

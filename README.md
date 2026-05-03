@@ -1,95 +1,179 @@
-# 🧠 Neuro CLI
+# Neuro
 
 > **Persona-Driven AI Alignment for Organisations.**
 
-Neuro is a professional orchestration layer that synchronises AI agent behaviours across an entire organisation. It ensures that every developer’s AI—whether in Cursor, Claude, or Copilot—operates with the same high-standard skills, tools, and hooks defined by their specific role (**Persona**).
+Neuro is a professional orchestration layer that synchronises AI agent behaviours across an entire organisation. It ensures that every developer's AI — whether in Cursor, Claude Code, or Copilot — operates with the same high-standard skills, tools, and persona defined by their specific role.
 
 ---
 
-## 🚀 Installation & Setup
+## Quick Start
 
-Neuro follows a "Source of Truth" model. During installation, the CLI links your machine to your organisation’s central configuration repository to establish a unified base.
+```bash
+# 1. Run the installer
+sudo ./install.sh
 
-### 1. Run the Installer
+# 2. Select your AI provider (Claude · Ollama · Codex · GitHub Copilot)
+# 3. Connect your team's Skill Vault (Git repository URL)
+# 4. Choose your role persona (architect · frontend · backend · security · …)
+
+# Launch the interactive TUI
+neuro
+```
+
+---
+
+## Installation
+
+### Requirements
+
+| Requirement | Notes |
+| :--- | :--- |
+| Python 3.10+ | Used for the neuro package |
+| Git | For cloning skill repositories |
+| Node.js / npm | Only for Claude provider (`@anthropic-ai/claude-code`) |
+| `sudo` access | For linking `/usr/local/bin/neuro` |
+
+### Run the Installer
+
 ```bash
 sudo ./install.sh
 ```
 
-### 2. Connect Your Skill Vault
-The installer will prompt you for a **Skills Repository URL**. 
-*   **Template:** Use the [Neuro-Template](https://github.com) as your base.
-*   **Initial Sync:** The CLI clones this repository into `~/.neuro/`, instantly downloading all `_common` and `_persona` configurations.
+The installer guides you through:
 
-### 3. Persona Selection
-After the sync, you will be prompted to select your **Persona** (e.g., Architect, Frontend, DevOps).
-*   **Result:** Neuro configures your local instance to prioritise skills from `_persona/<selected>` while maintaining the global guardrails from `_common`.
+1. **AI Provider** — choose which model powers your TUI chat
+2. **Skill Vault** — clone your organisation's template repository
+3. **Persona** — select your role (filters which skills are installed)
+4. **Python environment** — creates `~/.neuro/.venv` and installs all dependencies
 
----
+### Providers
 
-## 🛠 How It Works
-
-### The Multi-Layer Architecture
-Neuro organises your organisation's collective intelligence into a hierarchy that prevents "Agent Drift":
-
-*   **`_common/`**: Universal rules, security guardrails, and base coding standards applied to **every** seat in the organisation.
-*   **`_persona/`**: Role-specific expertise. A "Lead Architect" persona might include system design skills, while a "Security" persona includes vulnerability scanning tools.
-*   **`hooks/`**: Automated scripts that trigger during agent actions to ensure compliance.
-
-### Project Initialization
-When you run `neuro init` in a repository:
-1.  **Agent Discovery:** Neuro detects which agents are present (Cursor, Claude, Copilot, etc.).
-2.  **Smart Symlinking:** It maps your persona-filtered vault (`~/.neuro`) directly into the project's local agent folders.
-3.  **Instant Alignment:** Your AI immediately adopts the directives, hooks, and tools assigned to your organisational role.
+| Option | Provider | Requirements |
+| :--- | :--- | :--- |
+| 1 | Claude (CLI) | Claude Code subscription + `claude` binary |
+| 2 | Ollama (local) | `ollama` installed and running |
+| 3 | Codex / OpenAI | OpenAI API key |
+| 4 | GitHub Copilot | `GITHUB_TOKEN` with model access |
 
 ---
 
-## 📂 Repository Structure
-To maintain compatibility, your skills repository must follow this standard:
+## CLI Commands
 
-```text
-Neuro-Vault/
-├── _common/           # Universal skills/tools for all users
-│   ├── skills/        # Global .md directives
-│   └── tools/         # Global MCP / scripts
-├── _persona/          # Role-based directories
-│   ├── {role/team}/     # specific role or team specific vault, can be defined for usecase
-│       ├── skills/        # Persona-specific .md directives
-│       └── tools/         # Persona-specific MCP / scripts
-└── hooks/             # Global pre-flight scripts
-```
-```text
-EXAMPLE
-Neuro-Vault/
-├── _common/           # Universal skills/tools for all users
-│   ├── skills/        # Global .md directives
-│   └── tools/         # Global MCP / scripts
-├── _persona/          # Role-based directories
-│   ├── architect/     # Architect-specific vault
-│       ├── skills/        # Persona-specific .md directives
-│       └── tools/         # Persona-specific MCP / scripts
-│   ├── frontend/      # Frontend-specific vault
-│       ├── skills/        # Persona-specific .md directives
-│       └── tools/         # Persona-specific MCP / scripts
-│   ├── backend/      # Frontend-specific vault
-│       ├── skills/        # Persona-specific .md directives
-│       └── tools/         # Persona-specific MCP / scripts
-│   └── security/      # Security-specific vault
-│       ├── skills/        # Persona-specific .md directives
-│       └── tools/         # Persona-specific MCP / scripts
-└── hooks/             # Global pre-flight scripts
-```
-
----
-
-## 💻 Commands
-
+### Core
 
 | Command | Description |
 | :--- | :--- |
-| `neuro init` | Align local AI agents with your selected persona. |
-| `neuro status` | View active links and verify current persona alignment. |
-| `neuro init --force` | Force-create agent folders if they don't exist yet. |
+| `neuro` | Launch the interactive TUI |
+| `neuro init` | Detect installed agents and sync all skills/tools |
+| `neuro status` | Show which agents are detected and what is installed |
+| `neuro update` | Pull latest skills from the template repository |
+| `neuro config` | View `~/.neuro/config.json` |
+| `neuro config agent model <value>` | Update a config value |
+| `neuro uninstall` | Remove all Neuro assets and the CLI binary |
+
+### Agent Management
+
+| Command | Description |
+| :--- | :--- |
+| `neuro agent update` | Interactively switch AI provider or model |
+| `neuro agent status` | Show the currently active provider |
 
 ---
 
-**Standardise the intent. Scale the expertise. Build with Neuro.**
+## TUI Commands
+
+Launch the TUI with `neuro`, then use these slash commands:
+
+| Command | Description |
+| :--- | :--- |
+| `/skills list` | View installed skills and tools |
+| `/skills add <path\|url>` | Install a skill from a local path or Git URL |
+| `/skills remove [name]` | Remove an installed skill |
+| `/skills check [name]` | Check for updates and preview the diff |
+| `/skills create` | Create a new skill (with policy validation) |
+| `/skills update` | Re-install all skills from the template repository |
+| `/agent` | Show the current AI provider |
+| `/agent update` | Switch provider or model interactively |
+| `/agent refresh` | Rebuild the agent context |
+| `/agent clear` | Clear conversation history |
+| `/init` | Run `neuro init` from within the TUI |
+| `/status` | Show agent detection status |
+| `/config [key value]` | View or update config values |
+| `/clear` | Clear the screen |
+| `/help` | Show this command list |
+| `/exit` | Exit Neuro |
+
+Any text that is not a slash command is sent to your configured AI provider as a chat message.
+
+---
+
+## Skill Vault Structure
+
+Your organisation's template repository must follow this layout:
+
+```
+Neuro-Vault/
+├── _common/                # Applied to every user
+│   ├── skills/             # Universal .md skill directives
+│   └── tools/              # Universal MCP / tool definitions
+├── _persona/               # Role-based layers
+│   ├── architect/
+│   │   ├── skills/
+│   │   └── tools/
+│   ├── frontend/
+│   ├── backend/
+│   └── security/
+└── _agents/                # Provider-specific skills
+    ├── claude/
+    │   └── skills/
+    ├── ollama/
+    └── copilot/
+```
+
+Layers are applied in order: `_common` → `_persona/<role>` → `_agents/<provider>`.
+
+---
+
+## Configuration
+
+All settings are stored in `~/.neuro/config.json`:
+
+```json
+{
+  "version": "1.0.0",
+  "agent": {
+    "provider": "claude",
+    "model": "claude-opus-4-7"
+  },
+  "templateRepository": [
+    {
+      "url": "git@github.com:your-org/neuro-vault.git",
+      "name": "neuro-vault",
+      "path": "/home/user/.neuro/template/neuro-vault"
+    }
+  ],
+  "role": "backend"
+}
+```
+
+| Key | Description |
+| :--- | :--- |
+| `agent.provider` | Active chat provider (`claude` · `ollama` · `codex` · `copilot`) |
+| `agent.model` | Model identifier passed to the provider |
+| `agent.api_key` | Stored API key (codex / copilot) |
+| `templateRepository` | One or more cloned skill vault repositories |
+| `role` | Persona applied during `neuro init` |
+
+---
+
+## Uninstall
+
+```bash
+neuro uninstall
+```
+
+Removes all agent-installed skills, runs `pip uninstall neuro`, deletes `~/.neuro/`, and removes `/usr/local/bin/neuro`. Requires typing `yes` to confirm.
+
+---
+
+*Standardise the intent. Scale the expertise. Build with Neuro.*
