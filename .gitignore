@@ -26,6 +26,9 @@ ENV/
 .eggs/
 .python-version
 
+# Neuro
+.neuro/
+
 # VS Code
 .vscode/
 
