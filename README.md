@@ -42,7 +42,8 @@ sudo ./install.sh
 The installer guides you through:
 
 1. **AI Provider** — choose which model powers your TUI chat
-2. **Skill Vault** — clone your organisation's template repository
+2. **Skill Vault** — clone your organisation's template repository. (Sample Github : https://github.com/Enterprise-Data-X/Neuro-Template)
+    
 3. **Persona** — select your role (filters which skills are installed)
 4. **Python environment** — creates `~/.neuro/.venv` and installs all dependencies
 

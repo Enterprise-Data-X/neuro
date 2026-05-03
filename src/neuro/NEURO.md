@@ -27,6 +27,7 @@ Neuro installs skills into your agent's configuration directory during `neuro in
 | Continue.dev | `~/.continue/prompts/` | — |
 | GitHub Copilot | appended to this file | — |
 
+
 **On every session start:**
 
 1. Identify all skills available in your skills directory.

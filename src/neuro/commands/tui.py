@@ -199,11 +199,18 @@ def _stream_agent_reply(agent, message: str) -> None:
     def _do_stream() -> None:
         agent.chat(message, on_token=lambda t: console.print(t, end="", highlight=False))
 
+    # try:
+    #     _do_stream()
+    # except RuntimeError as exc:
+    #     if any(kw in str(exc).lower() for kw in _LOGIN_KEYWORDS):
+    #         _warn("Claude CLI is not logged in.")
     try:
         _do_stream()
     except RuntimeError as exc:
         if any(kw in str(exc).lower() for kw in _LOGIN_KEYWORDS):
-            _warn("Claude CLI is not logged in.")
+            # Check if they have an API key they could use
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                _warn("Claude is not logged in. TIP: Set ANTHROPIC_API_KEY to skip this.")
             if _run_claude_login(agent):
                 _hint("Retrying your message…")
                 console.print()
